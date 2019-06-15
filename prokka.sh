@@ -4,7 +4,7 @@ prokka $i \
 --prefix $(basename $i .reformatted.fasta) \
 --addgenes \
 --addmrna \
---locustag gene \
+--locustag contig \
 --compliant \
 --genus pelagibacter \
 --species ubique \
