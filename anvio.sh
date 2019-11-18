@@ -160,7 +160,10 @@ for f in file_list:
 
 process_file(results, 'binsanity.bins.tsv')
 ```
-#anvi'o import a collection and export it allows for it to be exported as misc data to allow for viewing my multiple binning softwares
+#anvi'o import a collection and export it allows for it to be exported as misc data to allow for viewing
+#by multiple binning softwares in anvi'o interactive. 
+#If not done this way, only one binning software can be viewed at one time in anvi'o interactive
+
 #metabat2
 anvi-import-collection \
 metabat2.bins.tsv \
