@@ -1,45 +1,61 @@
 #script for making an anvio plot
 
-#map reads from other metagenomic samples in the same diel cycle against the assembly of a metagenome
-bbwrap.sh ref=AE1712_3_80m_1k_reformatted.fasta build=3 append \
-in=AE1712_1_interleaved_80m.qtrimmed.fq.gz,AE1712_1_interleaved_80m.merged.fq.gz,\
-AE1712_5_interleaved_80m.qtrimmed.fq.gz,AE1712_5_interleaved_80m.merged.fq.gz,\
-AE1712_3_interleaved_80m.qtrimmed.fq.gz,AE1712_3_interleaved_80m.merged.fq.gz,\
-AE1712_7_interleaved_80m.qtrimmed.fq.gz,AE1712_7_interleaved_80m.merged.fq.gz,\
-AE1712_9_interleaved_80m.qtrimmed.fq.gz,AE1712_9_interleaved_80m.merged.fq.gz,\
-AE1712_11_interleaved_80m.qtrimmed.fq.gz,AE1712_11_interleaved_80m.merged.fq.gz \
-out=AE1712_3_80m_1k_reformatted.sam
+#map reads from other metagenomic samples in the same diel cycle against the assembly of a metagenome using Bowtie2 and BamM
+#make bowtie2 index
+cat ($all_spades_assemblies) > all_cellular_contigs.fna
+bowtie2-build all_cellular_contigs.fna cellular_contigs
+
+for i in *fwd.fq.gz; do
+bowtie2 \
+--threads 16 \
+-x cellular_contigs \
+-1 $i \
+-2 $(basename $i fwd.fq.gz).rev.fq.gz \
+--no-unal \
+-S $(basename $i fwd.fq.gz).sam 2>&1 | tee $(basename $i fwd.fq.gz).log;
+done
 
 #sort and index the bam files to order them
-samtools view -F 4 -buS AE1712_3_80m_1k_reformatted.sam | samtools sort - -o AE1712_3_80m_1k_reformatted.srt.bam
-samtools index AE1712_3_80m_1k_reformatted.srt.bam
+for i in *.sam; do
+samtools view -F 4 -@ 16 -buSh $i | samtools sort -@ 16 - -o $(basename $i .sam).srt.bam;
+samtools index -@ 16 $(basename $i .sam).srt.bam;
+done
+
+#filter mappings below >95% identity
+for i in *.srt.bam; do
+bamm filter -b $i --percentage_id 0.95 2>&1 | tee $(basename $i .bam).srt.fltr.log;
+samtools sort -@ 16 $(basename $i .bam)_filtered.bam -o $(basename $i .bam).srt.fltr.bam;
+samtools index $(basename $i .bam).srt.fltr.bam;
+rm $(basename $i .bam)_filtered.bam ${i}*;
+done
 
 #generage the anvi'o database from the metagenomic assembly
-anvi-gen-contigs-database -f AE1712_3_80m_1k_reformatted.fasta -o contigs_3.db -n "AE1712_3_80m contigs database"
+anvi-gen-contigs-database -f all_cellular_contigs.fna -o contigs.db -n "AE1712 contigs database"
 #run HMMs search for ribosomal RNA 
-anvi-run-hmms -c contigs_3.db -T 16
+anvi-run-hmms -c contigs.db -T 16
 #run COGs search to annotate protein families
-anvi-run-ncbi-cogs -c contigs_3.db -T 16 --sensitive
+anvi-run-ncbi-cogs -c contigs.db -T 16 --sensitive
 
 #generate sequences for gene taxonomy
-anvi-get-sequences-for-gene-calls -c contigs_3.db -o gene-calls.fa
+anvi-get-sequences-for-gene-calls -c contigs.db -o gene-calls.fa
 
-#use the Contig Annotation Tool to annotate the gene calls with taxonomy
-CAT contigs \
--c gene_calls.fa \
--d ~/../bt273/BIOS-SCOPE/metag/ashley/tools/CAT/2018-10-16_CAT_database \
--t ~/../bt273/BIOS-SCOPE/metag/ashley/tools/CAT/2018-10-16_taxonomy \
--n 16 \
---out_prefix gene_calls_CAT
+#perform gene taxonomy on cellular contigs
+KAIJUDB=$(kaiju_db_dir)
 
-CAT add_names \
--i gene_calls_CAT.contig2classification.txt \
--o gene_calls_CAT.contig2classification.official_names.txt \
--t ~/../bt273/BIOS-SCOPE/metag/ashley/tools/CAT/2018-10-16_taxonomy \
---only_official
+kaiju -t $KAIJUDB/nodes.dmp \
+      -f $KAIJUDB/kaiju_db_nr.fmi \
+      -i gene_calls.fa \
+      -o gene_calls_nr.out \
+      -z 16 \
+      -v 2>&1 | tee -a $PROFILE_LOG
 
-CAT summarise \
--c gene_calls.fa \
--i gene_calls_CAT.official_names.txt \
--o gene_calls_CAT.summary.txt
+addTaxonNames -t $KAIJUDB/nodes.dmp \
+              -n $KAIJUDB/names.dmp \
+              -i gene_calls_nr.out \
+              -o gene_calls_nr.names \
+              -r superkingdom,phylum,class,order,family,genus,species
 
+anvi-import-taxonomy-for-genes -i gene_calls_nr.names \
+-c contigs.db \
+-p kaiju \
+--just-do-it 2>&1 | tee -a $PROFILE_LOG
