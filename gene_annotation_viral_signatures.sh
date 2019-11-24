@@ -1,3 +1,4 @@
+#!/bin/bash
 prodigal -p meta -i <viral_input> -d <viral_output>
 
 diamond blastx -d <diamond_nr_database> \
@@ -6,7 +7,7 @@ diamond blastx -d <diamond_nr_database> \
 --outfmt 6 qseqid evalue bitscore stitle -k 1 \
 --more-sensitive
 
-```{r}
+```{R}
 library(ggfittext)
 library(gggenes)
 library(ggplot2)
