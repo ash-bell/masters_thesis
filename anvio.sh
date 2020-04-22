@@ -1,7 +1,7 @@
 #script for making an anvio
 
 #rename all contigs with simple names
-for i in *200m*.fasta; do
+for i in *metagenomes*.fasta; do
 anvi-script-reformat-fasta \
 $i \
 -o $(basename $i .fasta).fna \
@@ -31,7 +31,7 @@ anvi-get-sequences-for-gene-calls -c contigs.db -o gene-calls.fa
 
 #make bowtie2 index
 #cat all the 200m contigs together
-cat *200m*.fna > all_cellular_contigs.fna
+cat *metagenomes*.fna > all_cellular_contigs.fna
 bowtie2-build all_cellular_contigs.fna cellular_contigs
 
 for i in *fwd.fq.gz; do
